@@ -1,6 +1,7 @@
 #include "wls.h"
 
 static ioline_t col_pins[MATRIX_COLS] = MATRIX_COL_PINS;
+// static ioline_t row_pins[MATRIX_COLS] = MATRIX_ROW_PINS;
 
 bool hs_modeio_detection(bool update, uint8_t *mode, uint8_t lsat_btdev) {
     static uint32_t scan_timer = 0x00;
@@ -74,12 +75,42 @@ uint32_t hs_rgb_blink_get_timer(void) {
     return hs_linker_rgb_timer;
 }
 
+extern bool state;
+
 bool hs_rgb_blink_hook() {
     static uint8_t last_status;
-
+    uint32_t timeout = 0;
+  
     if (last_status != *md_getp_state()) {
         last_status = *md_getp_state();
         hs_rgb_blink_set_timer(0x00);
+    }
+    
+    switch (hs_get_sleep_timeout()) {
+        case hs_sleep_timeout_none: {
+            timeout = 0;
+        } break;
+        case hs_sleep_timeout_1min: {
+            timeout = 1 * 60000;
+        } break;
+        case hs_sleep_timeout_3min: {
+            timeout = 3 * 60000;
+        } break;
+        case hs_sleep_timeout_5min: {
+            timeout = 5 * 60000;
+        } break;
+        case hs_sleep_timeout_10min: {
+            timeout = 10 * 60000;
+        } break;
+        case hs_sleep_timeout_20min: {
+            timeout = 20 * 60000;
+        } break;
+        case hs_sleep_timeout_30min: {
+            timeout = 30 * 60000;
+        } break;
+        case hs_sleep_timeout_vendor: {
+            timeout = HS_SLEEP_TIMEOUT;
+        } break;
     }
 
     switch (*md_getp_state()) {
@@ -87,30 +118,60 @@ bool hs_rgb_blink_hook() {
             hs_rgb_blink_set_timer(0x00);
         } break;
 
-        case MD_STATE_DISCONNECTED:
+        case MD_STATE_DISCONNECTED:{
             if (hs_rgb_blink_get_timer() == 0x00) {
                 hs_rgb_blink_set_timer(timer_read32());
                 extern void wireless_devs_change_kb(uint8_t old_devs, uint8_t new_devs, bool reset);
                 wireless_devs_change_kb(wireless_get_current_devs(), wireless_get_current_devs(), false);
             } else {
-                if (timer_elapsed32(hs_rgb_blink_get_timer()) >= HS_LBACK_TIMEOUT) {
+                if (!state){
+                    if ((timer_elapsed32(hs_rgb_blink_get_timer()) >= HS_LBACK_TIMEOUT) && !rgbrec_is_started()) {
+                        hs_rgb_blink_set_timer(timer_read32());
+                        md_send_devctrl(MD_SND_CMD_DEVCTRL_USB);
+                        wait_ms(200);
+                        lpwr_set_timeout_manual(true);
+                    }
+                }
+                else{
+                    if ((timer_elapsed32(hs_rgb_blink_get_timer()) >= HS_PAIR_TIMEOUT) && !rgbrec_is_started()) {
+                        hs_rgb_blink_set_timer(timer_read32());
+                        md_send_devctrl(MD_SND_CMD_DEVCTRL_USB);
+                        wait_ms(200);
+                        lpwr_set_timeout_manual(true);
+                    }
+                }
+            }
+        } break;
+        case MD_STATE_CONNECTED:{
+            if (hs_rgb_blink_get_timer() == 0x00) {
+                hs_rgb_blink_set_timer(timer_read32());
+                extern bool hs_wlr_succeed;
+                extern uint32_t hs_usb_succeed_time;
+                hs_wlr_succeed = true;
+                hs_usb_succeed_time = timer_read32();
+            } else {
+                if (timer_elapsed32(hs_rgb_blink_get_timer()) >= timeout && !rgbrec_is_started()) {
+                    hs_rgb_blink_set_timer(timer_read32());
+                    clear_keyboard();
+                    lpwr_set_timeout_manual(true);
+                }
+            }
+        } break;
+
+        case MD_STATE_PAIRING:{
+            if (hs_rgb_blink_get_timer() == 0x00) {
+                hs_rgb_blink_set_timer(timer_read32());
+    
+            } else {
+                if (timer_elapsed32(hs_rgb_blink_get_timer()) >= HS_PAIR_TIMEOUT && !rgbrec_is_started()) {
                     hs_rgb_blink_set_timer(timer_read32());
                     md_send_devctrl(MD_SND_CMD_DEVCTRL_USB);
                     wait_ms(200);
                     lpwr_set_timeout_manual(true);
                 }
             }
-        case MD_STATE_CONNECTED:
-            if (hs_rgb_blink_get_timer() == 0x00) {
-                hs_rgb_blink_set_timer(timer_read32());
-            } else {
-                if (timer_elapsed32(hs_rgb_blink_get_timer()) >= HS_SLEEP_TIMEOUT) {
-                    hs_rgb_blink_set_timer(timer_read32());
-                    lpwr_set_timeout_manual(true);
-                }
-            }
-        default:
-            break;
+        } break;
+        default:break;
     }
     return true;
 }
@@ -139,6 +200,7 @@ void lpwr_exti_init_hook(void) {
         }
 #endif
     }
+
     setPinInput(HS_BAT_CABLE_PIN);
     waitInputPinDelay();
     palEnableLineEvent(HS_BAT_CABLE_PIN, PAL_EVENT_MODE_RISING_EDGE);
@@ -170,11 +232,9 @@ void lpwr_stop_hook_pre(void) {
 
     gpio_write_pin_low(LED_POWER_EN_PIN);
     gpio_write_pin_low(A9);
+    gpio_write_pin_low(B9);
     gpio_write_pin_low(HS_LED_BOOSTING_PIN);
-
-    gpio_write_pin_high(HS_CAPS_PIN);
-    gpio_write_pin_high(HS_WIN_LOCK_PIN);
-
+    state = false;
     if (lower_sleep) {
         md_send_devctrl(MD_SND_CMD_DEVCTRL_USB);
         wait_ms(200);
@@ -195,4 +255,80 @@ void lpwr_stop_hook_post(void) {
             } break;
         }
     }
+}
+
+void via_custom_value_command_kb(uint8_t *data, uint8_t length) {
+    // data = [ command_id, channel_id, value_id, value_data ]
+    uint8_t *command_id = &(data[0]);
+    uint8_t *value_id   = &(data[2]);
+    uint8_t *value_data = &(data[3]);
+
+    hs_rgb_blink_set_timer(timer_read32());
+
+    switch (*command_id) {
+        case id_custom_get_value: {
+            switch (*value_id) {
+                case id_sleep_timeout: {
+                    value_data[0] = hs_get_sleep_timeout();
+                } break;
+                case id_rgbrec_channel: {
+                    value_data[0] = (uint8_t)RGBREC_CHANNEL_NUM;
+                } break;
+                case id_rgbrec_hs_data: {
+                    uint16_t hs = rgbrec_get_hs_data(value_data[0], value_data[1], value_data[2]);
+                    value_data[3] = hs & 0xFF;
+                    value_data[4] = hs >> 8;
+                } break;
+                case id_rgbrec_hs_buffer: {
+                    uint16_t offset = (value_data[0] << 8) | value_data[1];
+                    uint16_t size   = value_data[2]; // size <= 26
+                    rgbrec_get_hs_buffer(offset, size, &value_data[3]);
+                } break;
+                default:{ 
+                    *command_id = id_unhandled;
+                }break;
+            }
+        } break;
+        case id_custom_set_value:{
+            switch (*value_id) {
+                case id_sleep_timeout: {
+                    if (value_data[0] <= hs_sleep_timeout_vendor) {
+                        hs_set_sleep_timeout(value_data[0]);
+                        eeconfig_confinfo_update();
+                    }
+                } break;
+                case id_rgbrec_channel: {
+                    rgbrec_switch_channel(value_data[0]);
+                } break;
+                case id_rgbrec_hs_data: {
+                    rgbrec_set_hs_data(value_data[0], value_data[1], value_data[2], value_data[3] | value_data[4] << 8);
+                } break;
+                case id_rgbrec_hs_buffer: {
+                    uint16_t offset = (value_data[0] << 8) | value_data[1];
+                    uint16_t size   = value_data[2]; // size <= 26
+                    rgbrec_set_hs_buffer(offset, size, &value_data[3]);
+                } break;
+                default:{ 
+                    *command_id = id_unhandled;
+                }break;
+            }
+        } break;
+        case id_eeprom_reset: {
+            hs_reset_settings();
+        } break;
+        default:{ 
+            *command_id = id_unhandled;
+        }break;
+    }
+}
+
+bool via_command_kb(uint8_t *data, uint8_t length) {
+    
+    hs_rgb_blink_set_timer(timer_read32());
+    
+    // if (hs_via_custom_value_command_kb(data, length) != false){
+    //     replaced_hid_send(data, length);
+    //     return true;
+    // }
+    return false;
 }

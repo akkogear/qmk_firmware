@@ -50,7 +50,7 @@
 #define HS_YELLOW       0x2BFF
 
 #define LASET_MOD_NO    0xFF
-#define RGB_HSV_MAX     7
+#define RGB_HSV_MAX     5
 #define ________        HS_BLACK
 
 #ifndef RGB_RECORD_HS_LISTS
@@ -69,9 +69,14 @@
 #define IM_BAT_REQ_LEVEL3_COLOR RGB_MATRIX_BAT_VAL, 0x00, 0x00
 
 void rgbrec_read_current_channel(uint8_t channel);
+void rgbrec_switch_channel(uint8_t channel);
+uint16_t rgbrec_get_hs_data(uint8_t channel, uint8_t row, uint8_t column);
+void rgbrec_set_hs_data(uint8_t channel, uint8_t row, uint8_t column, uint16_t hs);
 void rgbrec_set_close_all(uint8_t h, uint8_t s, uint8_t v);
+void rgbrec_set_hs_buffer(uint16_t offset, uint16_t size, uint8_t *data);
 void rgbrec_play(uint8_t led_min, uint8_t led_max);
 bool rgbrec_end(uint8_t channel);
+void rgbrec_get_hs_buffer(uint16_t offset, uint16_t size, uint8_t *data);
 bool rgbrec_start(uint8_t channel);
 bool rgbrec_show(uint8_t channel);
 void rgbrec_init(uint8_t channel);

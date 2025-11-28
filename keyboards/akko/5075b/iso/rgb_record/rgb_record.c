@@ -170,6 +170,34 @@ void rgbrec_play(uint8_t led_min, uint8_t led_max) {
     }
 }
 
+void rgbrec_get_hs_buffer(uint16_t offset, uint16_t size, uint8_t *data) {
+    uint16_t hs_total_size = RGBREC_CHANNEL_NUM * MATRIX_ROWS * MATRIX_COLS * 2;
+    void *source           = (void *)(RGBREC_EECONFIG_ADDR + offset);
+    uint8_t *target        = data;
+    for (uint16_t i = 0; i < size; i++) {
+        if (offset + i < hs_total_size) {
+            *target = eeprom_read_byte(source);
+        } else {
+            *target = 0x00;
+        }
+        source++;
+        target++;
+    }
+}
+
+void rgbrec_set_hs_buffer(uint16_t offset, uint16_t size, uint8_t *data) {
+    uint16_t hs_total_size = RGBREC_CHANNEL_NUM * MATRIX_ROWS * MATRIX_COLS * 2;
+    void *target           = (void *)(RGBREC_EECONFIG_ADDR + offset);
+    uint8_t *source        = data;
+    for (uint16_t i = 0; i < size; i++) {
+        if ((offset + i) < hs_total_size) {
+            eeprom_update_byte(target, *source);
+        }
+        source++;
+        target++;
+    }
+}
+
 void rgbrec_set_close_all(uint8_t h, uint8_t s, uint8_t v) {
 
     if (!h && !s && !v) {
@@ -251,18 +279,6 @@ uint8_t find_index(void) {
     return 0;
 }
 
-void record_rgbmatrix_increase(uint8_t *last_mode) {
-    uint8_t index;
-
-    index = find_index();
-    if (rgbrec_info.state != RGBREC_STATE_ON) {
-        index = (index + 1) % (sizeof(rgbmatrix_buff) / sizeof(rgbmatrix_buff[0]));
-    }
-    *last_mode = rgbmatrix_buff[index];
-    rgb_matrix_mode(rgbmatrix_buff[index]);
-    record_color_hsv(false);
-}
-
 uint8_t record_color_read_data(void) {
     uint8_t hs_mode    = find_index();
     const uint8_t *ptr = (const uint8_t *)(((uint32_t)CONFINFO_EECONFIG_ADDR + 4) + hs_mode);
@@ -275,6 +291,63 @@ uint8_t record_color_read_data(void) {
     }
 }
 
+void record_rgbmatrix_increase(uint8_t *last_mode) {
+    uint8_t index;
+
+    index = find_index();
+    if (rgbrec_info.state != RGBREC_STATE_ON) {
+        index = (index + 1) % (sizeof(rgbmatrix_buff) / sizeof(rgbmatrix_buff[0]));
+    }
+    *last_mode = rgbmatrix_buff[index];
+    rgb_matrix_mode(rgbmatrix_buff[index]);
+    //record_color_hsv(false);
+    uint8_t rgb_hsv_index =  record_color_read_data();
+    rgb_matrix_sethsv(rgb_hsvs[rgb_hsv_index][0], rgb_hsvs[rgb_hsv_index][1], rgb_matrix_get_val());
+}
+
+void rgbrec_switch_channel(uint8_t channel) {
+    if (channel >= RGBREC_CHANNEL_NUM) {
+        return;
+    }
+
+    rgbrec_read_current_channel(channel);
+    rgbrec_end(channel);                  
+    rgbrec_show(channel);
+}
+
+uint32_t rgbrec_calc_address(uint8_t channel, uint8_t row, uint8_t column) {
+    uint32_t addr = 0x00;
+
+    addr = (uint32_t)(RGBREC_EECONFIG_ADDR) + (channel * sizeof(rgbrec_buffer)) + ((row * MATRIX_COLS + column) * 2);
+
+    return addr;
+}
+
+uint16_t rgbrec_get_hs_data(uint8_t channel, uint8_t row, uint8_t column) {
+    if (channel >= RGBREC_CHANNEL_NUM || row >= MATRIX_ROWS || column >= MATRIX_COLS) {
+        return 0x0000;
+    }
+
+    void *address = (uint32_t *)rgbrec_calc_address(channel, row, column);
+
+    // Little endian
+    uint16_t hs = eeprom_read_byte(address);
+    hs |= eeprom_read_byte(address + 1) << 8;
+    return hs;
+}
+
+void rgbrec_set_hs_data(uint8_t channel, uint8_t row, uint8_t column, uint16_t hs) {
+    if (channel >= RGBREC_CHANNEL_NUM || row >= MATRIX_ROWS || column >= MATRIX_COLS) {
+        return;
+    }
+
+    void *address = (uint32_t *)rgbrec_calc_address(channel, row, column);
+
+    // Little endian
+    eeprom_update_byte(address, (uint8_t)(hs & 0xFF));
+    eeprom_update_byte(address + 1, (uint8_t)(hs >> 8));
+}
+
 uint8_t record_color_hsv(bool status) {
     uint8_t temp;
     uint8_t rgb_hsv_index = record_color_read_data();
@@ -284,7 +357,7 @@ uint8_t record_color_hsv(bool status) {
             temp = RGB_HSV_MAX - 1;
             break;
         } else if (i == (sizeof(sixth_gear_buff) / sizeof(sixth_gear_buff[0]) - 1)) {
-            temp = RGB_HSV_MAX;
+            temp = RGB_HSV_MAX - 1;
         }
     }
 
@@ -292,14 +365,14 @@ uint8_t record_color_hsv(bool status) {
         if (rgb_hsv_index != temp)
             rgb_hsv_index = (rgb_hsv_index + 1);
         else
-            rgb_hsv_index = 0xFF;
+            return 0xFF;
     } else {
         if (rgb_hsv_index)
             rgb_hsv_index = (rgb_hsv_index - 1);
         else
-            rgb_hsv_index = 0xFF;
+            return 0xFF;
     }
-
+    dprintf("rgb_hsv_index = %d\r\n",rgb_hsv_index);
     rgb_matrix_sethsv(rgb_hsvs[rgb_hsv_index][0], rgb_hsvs[rgb_hsv_index][1], rgb_matrix_get_val());
 
     uint8_t *ptr = (uint8_t *)(((uint32_t)CONFINFO_EECONFIG_ADDR + 4) + find_index());

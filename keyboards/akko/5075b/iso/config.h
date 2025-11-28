@@ -4,7 +4,7 @@
 #pragma once
 
 #define USB_POWER_EN_PIN                    B1 // USB ENABLE pin
-#define LED_POWER_EN_PIN                    A5 // LED ENABLE pin
+#define LED_POWER_EN_PIN                    A8 // LED ENABLE pin
 #define HS_BAT_CABLE_PIN                    A7 // USB insertion detection pin
 #define HS_LED_BOOSTING_PIN                 A9 // LED BOOSTING
 
@@ -26,6 +26,8 @@
 #define HS_RGB_BLINK_INDEX_2G4              38
 #define HS_RGB_BLINK_INDEX_USB              37
 
+#define WIITE_B                             0X50
+
 #define HS_LBACK_COLOR_BT1                  RGB_RED
 #define HS_LBACK_COLOR_BT2                  RGB_BLUE
 #define HS_LBACK_COLOR_BT3                  RGB_YELLOW
@@ -45,8 +47,10 @@
 
 /* Status Indicator Lamp */
 #define HS_MATRIX_BLINK_INDEX_BAT           0
-#define HS_CAPS_PIN                         C5
-#define HS_WIN_LOCK_PIN                     B0
+#define WIN_PIN B0
+#define CPAS_PIN C5
+// #define HS_RGB_INDEX_CAPS                   52
+// #define HS_RGB_INDEX_WIN_LOCK               80
 
 #define HS_RGB_BLINK_INDEX_WIN              53
 #define HS_RGB_BLINK_INDEX_MAC              54
@@ -75,18 +79,20 @@
 /* RGB Matrix */
 #define RGB_MATRIX_FRAMEBUFFER_EFFECTS
 #define RGB_MATRIX_KEYPRESSES
+#define RGB_TRIGGER_ON_KEYDOWN
 
-/* WS2812 */
-#define WS2812_SPI_DRIVER  SPIDM2
-#define WS2812_SPI_DIVISOR 32
 /* RGB Light */
 #define RGBLED_NUM 22
 #define RGBLIGHT_CUSTOM_DRIVER
 #define RGBLIGHT_DISABLE_KEYCODES
 
-#define breathing_val      100
-#define rainbow_mood       100
+#define breathing_val      90
+#define rainbow_mood       90
 #define LED_TYPE           RGB
+
+/* WS2812 */
+#define WS2812_SPI_DRIVER  SPIDM2
+#define WS2812_SPI_DIVISOR 32
 
 /* rgb_record */
 #define ENABLE_RGB_MATRIX_RGBR_PLAY

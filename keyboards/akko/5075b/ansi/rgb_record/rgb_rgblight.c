@@ -1,9 +1,9 @@
 #include "rgb_rgblight.h"
 #include "rgblight.h"
+
 LED_TYPE led[RGBLED_NUM];
 extern rgblight_config_t rgblight_config;
 const uint8_t led_map[] = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21};
-
 void rgblight_call_driver(LED_TYPE *start_led, uint8_t num_leds) {
 
     memcpy(led, start_led, sizeof(LED_TYPE) * num_leds);
