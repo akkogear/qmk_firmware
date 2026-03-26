@@ -28,3 +28,60 @@ Enter the bootloader in 3 ways:
 * **Physical reset button**: Briefly press the button on the back of the PCB - some may have pads you must short instead
 * **Keycode in layout**: Press the key mapped to `QK_BOOT` if it is available
 
+## Flashing on macOS (Apple Silicon)
+
+QMK Toolbox (v0.3.3) bundles an x86_64-only `wb32-dfu-updater_cli` binary. On Apple Silicon Macs, this binary fails silently — it detects the device but does not actually write firmware (output shows only `Reset device completed!` with no `Download` progress).
+
+### Workaround: Build a native `wb32-dfu-updater_cli`
+
+```bash
+# 1. Install dependencies
+brew install cmake libusb
+
+# 2. Build native ARM64 binary
+cd /tmp
+git clone https://github.com/WestberryTech/wb32-dfu-updater.git
+cd wb32-dfu-updater
+mkdir build && cd build
+cmake .. && make
+
+# 3. The binary is at:
+#    wb32-dfu-updater/bin/Darwin_64_Debug/wb32-dfu-updater_cli
+```
+
+### Flash the firmware
+
+1. Switch the keyboard to **wired mode** (system switch under Caps Lock → middle position).
+2. Enter bootloader: press **Fn + R_Shift + Esc**.
+3. Flash (use `-t` flag for toolbox mode, which handles read-protection automatically):
+
+```bash
+/path/to/wb32-dfu-updater_cli -t -D /path/to/firmware.bin
+```
+
+Expected successful output:
+
+```
+Found DFU
+Opening DFU capable USB device ...
+Device ID 342d:dfa0
+The device bootloader version: 0.4
+Start Download ...
+Download block start address: 0x08000000
+Download block size: 73300 Bytes
+Writing ...
+OK
+Download completed!
+```
+
+### Notes
+
+* If your firmware is in `.hex` format, convert it to `.bin` first:
+
+```bash
+arm-none-eabi-objcopy -I ihex -O binary firmware.hex firmware.bin
+```
+
+* The `-t` (toolbox mode) flag is **required** — without it the download may be skipped silently.
+* The keyboard exits bootloader mode after a few seconds of inactivity, so run the flash command promptly after entering DFU mode.
+
